@@ -9,14 +9,22 @@ Created on Mon Feb  8 11:09:51 2021
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import datetime
 
 def init():
-    global session, sub_soup, url_main
+    global session, sub_soup, url_main, selection
     #get main page with categories tree
     session = requests.Session()
     session.headers.update({'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36'})
     session.headers.update({'Connection': 'keep-alive'})
-    url_init = 'https://pamacasa.pampanorama.it/spesa-consegna-domicilio/20135'
+    selection = input('global or local?\t').lower().strip()
+    if selection == 'local':
+        print('local inventory scraping')
+        code = input('postal code:\t')
+        url_init = f'https://pamacasa.pampanorama.it/spesa-consegna-domicilio/{code}'
+    else:
+        print('Global inventory scraping')
+        url_init = 'https://pamacasa.pampanorama.it'
     url_main = 'https://pamacasa.pampanorama.it'
     r = session.get(url_init)
     soup = BeautifulSoup(r.content, 'html.parser')
@@ -76,14 +84,22 @@ def main():
                     page += 1
                     load_more(loadmore_link, page, loadmore_id)
 
+def post_processing():
+    global df
+    df = df.join(df.product_quantity.str.split('-',1,expand=True).rename(columns={0:'product_quantity', 1:'price/quantity'}))
+    for i in df.index:
+        if pd.isnull(df.loc[i,'price_old']):
+            df.loc[i,'real_price'] = float(df.loc[i,'price_new'].replace(',','.'))
+        else: 
+            df.loc[i,'real_price'] = float(df.loc[i,'price_old'][:-2].replace(',','.'))
+    df.drop_duplicates(inplace = True, ignore_index = True)
+    date = datetime.datetime.now().strftime("%d_%m_%Y") 
+    df.to_excel(f'pam_{selection}_{date}_.xlsx')
+
 if __name__=='__main__':
     init()                              
     main()
-    df = df.join(df.product_quantity.str.split('-',1,expand=True).rename(columns={0:'product_quantity', 1:'price/quantity'}))
-    df.to_excel('pam3.xlsx')
-
-
-
+    post_processing()
 
 
 
